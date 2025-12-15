@@ -86,7 +86,7 @@ spec:
     spec:
       containers:
         - name: bomberman-server
-          image: docker.io/keanuwatts/theclusterflux:bomberman-server
+          image: docker.io/keanuwatts/theclusterflux:BombermanServer
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
