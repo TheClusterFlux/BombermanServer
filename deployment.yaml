@@ -1,0 +1,173 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bomberman-maps
+  namespace: default
+data:
+  default.txt: |
+    #################
+    #S.X.X.X.X.X.X.S#
+    #.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X#
+    #.#.#.#O#.#.#.#.#
+    #X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X#
+    #.#.#.#O#.#.#.#.#
+    #X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#
+    #S.X.X.X.X.X.X.S#
+    #################
+  arena.txt: |
+    #####################
+    #S.................S#
+    #.#####.#####.#####.#
+    #.................#.#
+    #.###.#########.###.#
+    #...#.....O.....#...#
+    #.###.#########.###.#
+    #.................#.#
+    #.#####.#####.#####.#
+    #S.................S#
+    #####################
+  classic.txt: |
+    ###################
+    #S...X.X.X.X.X...S#
+    #.#.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#.#
+    #X.X.X.X.X.X.X.X.X#
+    #.#.#.#.#.#.#.#.#.#
+    #S...X.X.X.X.X...S#
+    ###################
+  maze.txt: |
+    #########################
+    #S.X#.......#.......#X.S#
+    #.#.#.#####.#.#####.#.#.#
+    #.X.#...#.........#...X.#
+    ###.###.#.#######.#.###.#
+    #.....#.#.#.....#.#.#...#
+    #.###.#.#.#.###.#.#.#.###
+    #...#.....#..O..#.....#.#
+    #.#.###########.#####.#.#
+    #.#.....#.....#.....#...#
+    #.#####.#.###.#####.#####
+    #.......#.....#.........#
+    #S.X#.......#.......#X.S#
+    #########################
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bomberman-server
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bomberman-server
+  template:
+    metadata:
+      labels:
+        app: bomberman-server
+    spec:
+      containers:
+        - name: bomberman-server
+          image: docker.io/keanuwatts/theclusterflux:bomberman-server
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "8080"
+            - name: MAPS_DIR
+              value: "/app/maps"
+          volumeMounts:
+            - name: maps
+              mountPath: /app/maps
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: maps
+          configMap:
+            name: bomberman-maps
+      imagePullSecrets:
+        - name: dockerhub-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bomberman-server
+  namespace: default
+spec:
+  selector:
+    app: bomberman-server
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bomberman
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: "bomberman-server"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - bomberman.theclusterflux.com
+    secretName: theclusterflux
+  rules:
+  - host: bomberman.theclusterflux.com
+    http:
+      paths:
+      # WebSocket path for game server
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: bomberman-server
+            port:
+              number: 8080
+      # Client static files
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bomberman-client
+            port:
+              number: 8080
+
+
