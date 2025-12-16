@@ -7,7 +7,7 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocket.Server({ server, path: '/ws' });
 
 const lobbyManager = new LobbyManager();
 const clients = new Map(); // ws -> {id, username}

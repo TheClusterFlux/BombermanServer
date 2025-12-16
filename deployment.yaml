@@ -136,27 +136,14 @@ spec:
     clientIP:
       timeoutSeconds: 3600
 ---
+# Ingress for static client files
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: bomberman
+  name: bomberman-client
   namespace: default
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # WebSocket support
-    nginx.ingress.kubernetes.io/websocket-services: "bomberman-server"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    # Sticky sessions for WebSocket
-    nginx.ingress.kubernetes.io/affinity: "cookie"
-    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
-    nginx.ingress.kubernetes.io/session-cookie-name: "BOMBERROUTE"
-    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
-    nginx.ingress.kubernetes.io/session-cookie-change-on-failure: "true"
-    # Additional WebSocket headers
-    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
 spec:
   ingressClassName: nginx
   tls:
@@ -167,20 +154,46 @@ spec:
   - host: bomberman.theclusterflux.com
     http:
       paths:
-      # WebSocket path for game server
-      - path: /ws
-        pathType: Prefix
-        backend:
-          service:
-            name: bomberman-server
-            port:
-              number: 8080
-      # Client static files
       - path: /
         pathType: Prefix
         backend:
           service:
             name: bomberman-client
+            port:
+              number: 8080
+---
+# Separate ingress for WebSocket - needs different annotations
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bomberman-ws
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # WebSocket specific configuration
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    # WebSocket upgrade headers
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - bomberman.theclusterflux.com
+    secretName: theclusterflux
+  rules:
+  - host: bomberman.theclusterflux.com
+    http:
+      paths:
+      - path: /ws
+        pathType: Prefix
+        backend:
+          service:
+            name: bomberman-server
             port:
               number: 8080
 
