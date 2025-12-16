@@ -62,16 +62,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', lobbies: lobbyManager.lobbies.size });
 });
 
-// Root endpoint for WebSocket info
-app.get('/', (req, res) => {
-  res.json({ 
-    service: 'Bomberman WebSocket Server',
-    status: 'ok',
-    lobbies: lobbyManager.lobbies.size,
-    info: 'Use WebSocket connection to connect'
-  });
-});
-
 // WebSocket connection handler
 wss.on('connection', (ws) => {
   const playerId = generatePlayerId();
