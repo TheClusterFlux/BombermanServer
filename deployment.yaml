@@ -136,49 +136,18 @@ spec:
     clientIP:
       timeoutSeconds: 3600
 ---
-# Ingress for static client files
+# Combined ingress - /ws path first (more specific), then / (fallback)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: bomberman-client
+  name: bomberman
   namespace: default
   annotations:
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-spec:
-  ingressClassName: nginx
-  tls:
-  - hosts:
-    - bomberman.theclusterflux.com
-    secretName: theclusterflux
-  rules:
-  - host: bomberman.theclusterflux.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: bomberman-client
-            port:
-              number: 8080
----
-# Separate ingress for WebSocket - needs different annotations
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: bomberman-ws
-  namespace: default
-  annotations:
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # WebSocket specific configuration
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    # WebSocket upgrade headers
-    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
-    nginx.ingress.kubernetes.io/configuration-snippet: |
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection "upgrade";
+    # Enable WebSocket support
+    nginx.org/websocket-services: "bomberman-server"
 spec:
   ingressClassName: nginx
   tls:
@@ -189,11 +158,20 @@ spec:
   - host: bomberman.theclusterflux.com
     http:
       paths:
+      # WebSocket path - more specific, should match first
       - path: /ws
         pathType: Prefix
         backend:
           service:
             name: bomberman-server
+            port:
+              number: 8080
+      # Static client files - fallback for everything else
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bomberman-client
             port:
               number: 8080
 
