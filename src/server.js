@@ -135,14 +135,15 @@ function handleMessage(ws, message) {
       break;
       
     case 'CREATE_LOBBY':
-      const mapName = message.mapName || 'default';
-      const mapString = availableMaps.get(mapName) || availableMaps.get('default');
+      const createMapName = message.mapName || 'default';
+      const createMapString = availableMaps.get(createMapName) || availableMaps.get('default');
       const lobby = lobbyManager.createLobby(
         message.lobbyName || 'New Game',
         client.id,
         client.username,
         ws,
-        mapString
+        createMapString,
+        createMapName
       );
       
       ws.send(JSON.stringify({
@@ -225,6 +226,42 @@ function handleMessage(ws, message) {
       if (gameLobby && gameLobby.gameStarted) {
         // Pass the entire action object (may contain vx/vy for diagonal movement)
         gameLobby.handlePlayerAction(client.id, message.action);
+      }
+      break;
+      
+    case 'CHANGE_MAP':
+      const mapChangeLobby = lobbyManager.findPlayerLobby(client.id);
+      if (mapChangeLobby && mapChangeLobby.hostId === client.id && !mapChangeLobby.gameStarted) {
+        const newMapName = message.mapName || 'default';
+        const newMapString = availableMaps.get(newMapName) || availableMaps.get('default');
+        mapChangeLobby.setMap(newMapString, newMapName);
+        mapChangeLobby.broadcast({
+          type: 'LOBBY_UPDATED',
+          lobbyInfo: mapChangeLobby.getLobbyInfo()
+        });
+      }
+      break;
+      
+    case 'UPDATE_SETTINGS':
+      const settingsLobby = lobbyManager.findPlayerLobby(client.id);
+      if (settingsLobby && settingsLobby.hostId === client.id && !settingsLobby.gameStarted) {
+        if (settingsLobby.updateSettings(message.settings)) {
+          settingsLobby.broadcast({
+            type: 'LOBBY_UPDATED',
+            lobbyInfo: settingsLobby.getLobbyInfo()
+          });
+        }
+      }
+      break;
+      
+    case 'RESET_SETTINGS':
+      const resetLobby = lobbyManager.findPlayerLobby(client.id);
+      if (resetLobby && resetLobby.hostId === client.id && !resetLobby.gameStarted) {
+        resetLobby.resetSettings();
+        resetLobby.broadcast({
+          type: 'LOBBY_UPDATED',
+          lobbyInfo: resetLobby.getLobbyInfo()
+        });
       }
       break;
   }

@@ -4,7 +4,7 @@ const Bomb = require('./Bomb');
 const GAME_CONFIG = require('../config/gameConfig');
 
 class GameEngine {
-  constructor(mapString, players) {
+  constructor(mapString, players, customSettings = {}) {
     console.log('GameEngine constructor - mapString type:', typeof mapString, 'length:', mapString ? mapString.length : 'N/A');
     this.map = new GameMap(mapString);
     this.players = new Map();
@@ -14,14 +14,26 @@ class GameEngine {
     this.winner = null;
     this.bombIdCounter = 0;
     
+    // Custom game settings
+    this.settings = {
+      playerSpeed: customSettings.playerSpeed || GAME_CONFIG.defaultPlayerSpeed,
+      bombCount: customSettings.bombCount || GAME_CONFIG.defaultBombCount,
+      explosionRange: customSettings.explosionRange || GAME_CONFIG.defaultExplosionRange,
+      bombTimer: customSettings.bombTimer || GAME_CONFIG.bombTimer,
+      upgradeSpawnChance: customSettings.upgradeSpawnChance || 0.3
+    };
+    
+    // Pass settings to map for upgrade spawning
+    this.map.upgradeSpawnChance = this.settings.upgradeSpawnChance;
+    
     // Tick tracking for synchronization
     this.tick = 0;
     this.startTime = Date.now();
     
-    // Initialize players at spawn points
+    // Initialize players at spawn points with custom settings
     players.forEach((playerData, index) => {
       const spawnPoint = this.map.getSpawnPoint(index);
-      const player = new Player(playerData.id, playerData.username, spawnPoint);
+      const player = new Player(playerData.id, playerData.username, spawnPoint, this.settings);
       this.players.set(player.id, player);
     });
     

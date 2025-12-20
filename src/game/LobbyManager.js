@@ -6,9 +6,9 @@ class LobbyManager {
     this.lobbyIdCounter = 0;
   }
   
-  createLobby(name, hostId, username, hostClient, mapString) {
+  createLobby(name, hostId, username, hostClient, mapString, mapName) {
     const lobbyId = `lobby_${this.lobbyIdCounter++}`;
-    const lobby = new Lobby(lobbyId, name, hostId, mapString);
+    const lobby = new Lobby(lobbyId, name, hostId, mapString, mapName);
     lobby.addPlayer(hostId, username, hostClient);
     
     this.lobbies.set(lobbyId, lobby);

@@ -1,17 +1,17 @@
 const GAME_CONFIG = require('../config/gameConfig');
 
 class Player {
-  constructor(id, username, spawnPoint) {
+  constructor(id, username, spawnPoint, customSettings = {}) {
     this.id = id;
     this.username = username;
     this.x = spawnPoint.x + 0.5; // Center of tile
     this.y = spawnPoint.y + 0.5;
     this.alive = true;
     
-    // Stats (can be upgraded)
-    this.speed = GAME_CONFIG.defaultPlayerSpeed;
-    this.maxBombs = GAME_CONFIG.defaultBombCount;
-    this.explosionRange = GAME_CONFIG.defaultExplosionRange;
+    // Stats (can be upgraded) - use custom settings if provided
+    this.speed = customSettings.playerSpeed || GAME_CONFIG.defaultPlayerSpeed;
+    this.maxBombs = customSettings.bombCount || GAME_CONFIG.defaultBombCount;
+    this.explosionRange = customSettings.explosionRange || GAME_CONFIG.defaultExplosionRange;
     this.activeBombs = 0;
     
     // Movement (continuous, non-grid-locked)

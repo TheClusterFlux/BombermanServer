@@ -1,16 +1,29 @@
 const GameEngine = require('./GameEngine');
 const GAME_CONFIG = require('../config/gameConfig');
 
+// Default game settings
+const DEFAULT_SETTINGS = {
+  playerSpeed: GAME_CONFIG.defaultPlayerSpeed,
+  bombCount: GAME_CONFIG.defaultBombCount,
+  explosionRange: GAME_CONFIG.defaultExplosionRange,
+  bombTimer: GAME_CONFIG.bombTimer,
+  upgradeSpawnChance: 0.3, // 30% chance to spawn upgrade when box destroyed
+};
+
 class Lobby {
-  constructor(id, name, hostId, mapString) {
+  constructor(id, name, hostId, mapString, mapName) {
     this.id = id;
     this.name = name;
     this.hostId = hostId;
     this.mapString = mapString;
+    this.mapName = mapName || 'default';
     this.players = new Map(); // playerId -> {id, username, ready, client}
     this.gameEngine = null;
     this.gameStarted = false;
     this.gameInterval = null;
+    
+    // Custom game settings (host can modify)
+    this.settings = { ...DEFAULT_SETTINGS };
   }
   
   addPlayer(playerId, username, client) {
@@ -50,34 +63,101 @@ class Lobby {
   
   setPlayerReady(playerId, ready) {
     const player = this.players.get(playerId);
-    console.log(`setPlayerReady called for ${playerId}, isHost: ${playerId === this.hostId}, ready: ${ready}`);
     if (player && playerId !== this.hostId) { // Host is always ready
       player.ready = ready;
-      console.log(`Player ${playerId} ready state updated to: ${ready}`);
-    } else if (playerId === this.hostId) {
-      console.log(`Ignoring ready change for host - host is always ready`);
     }
+  }
+  
+  // Reset all players' ready state (except host)
+  resetReadyStates() {
+    for (const [playerId, player] of this.players) {
+      if (playerId !== this.hostId) {
+        player.ready = false;
+      }
+    }
+  }
+  
+  // Change map (host only) - resets ready states
+  setMap(mapString, mapName) {
+    this.mapString = mapString;
+    this.mapName = mapName;
+    this.resetReadyStates();
+    return true;
+  }
+  
+  // Update game settings (host only) - resets ready states
+  updateSettings(newSettings) {
+    let changed = false;
+    
+    // Validate and apply each setting
+    if (newSettings.playerSpeed !== undefined) {
+      const speed = parseFloat(newSettings.playerSpeed);
+      if (speed >= 1 && speed <= 10) {
+        this.settings.playerSpeed = speed;
+        changed = true;
+      }
+    }
+    
+    if (newSettings.bombCount !== undefined) {
+      const count = parseInt(newSettings.bombCount);
+      if (count >= 1 && count <= 10) {
+        this.settings.bombCount = count;
+        changed = true;
+      }
+    }
+    
+    if (newSettings.explosionRange !== undefined) {
+      const range = parseInt(newSettings.explosionRange);
+      if (range >= 1 && range <= 10) {
+        this.settings.explosionRange = range;
+        changed = true;
+      }
+    }
+    
+    if (newSettings.bombTimer !== undefined) {
+      const timer = parseInt(newSettings.bombTimer);
+      if (timer >= 1000 && timer <= 10000) {
+        this.settings.bombTimer = timer;
+        changed = true;
+      }
+    }
+    
+    if (newSettings.upgradeSpawnChance !== undefined) {
+      const chance = parseFloat(newSettings.upgradeSpawnChance);
+      if (chance >= 0 && chance <= 1) {
+        this.settings.upgradeSpawnChance = chance;
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      this.resetReadyStates();
+    }
+    
+    return changed;
+  }
+  
+  // Reset settings to defaults
+  resetSettings() {
+    this.settings = { ...DEFAULT_SETTINGS };
+    this.resetReadyStates();
   }
   
   canStartGame() {
     if (this.gameStarted) {
-      console.log('Cannot start: game already started');
       return false;
     }
     if (this.players.size < GAME_CONFIG.minPlayersToStart) {
-      console.log('Cannot start: not enough players', this.players.size, '/', GAME_CONFIG.minPlayersToStart);
       return false;
     }
     
     // Check if all players are ready
     for (const player of this.players.values()) {
       if (!player.ready) {
-        console.log('Cannot start: player not ready:', player.username, player.id);
         return false;
       }
     }
     
-    console.log('Can start game! All conditions met.');
     return true;
   }
   
@@ -90,38 +170,35 @@ class Lobby {
     try {
       this.gameStarted = true;
     
-    // Create game engine
-    const playerData = Array.from(this.players.values()).map(p => ({
-      id: p.id,
-      username: p.username
-    }));
-    
-    console.log('Starting game with map string length:', this.mapString ? this.mapString.length : 'undefined');
-    console.log('Map string type:', typeof this.mapString);
-    console.log('Map string first 50 chars:', this.mapString ? this.mapString.substring(0, 50) : 'N/A');
-    this.gameEngine = new GameEngine(this.mapString, playerData);
-    
-    // Start game loop
-    this.gameInterval = setInterval(() => {
-      const events = this.gameEngine.update();
+      // Create game engine with custom settings
+      const playerData = Array.from(this.players.values()).map(p => ({
+        id: p.id,
+        username: p.username
+      }));
       
-      // Broadcast game state to all players
-      this.broadcastGameState();
+      this.gameEngine = new GameEngine(this.mapString, playerData, this.settings);
       
-      // Broadcast events
-      if (events.length > 0) {
-        this.broadcast({
-          type: 'GAME_EVENTS',
-          events: events
-        });
-      }
+      // Start game loop
+      this.gameInterval = setInterval(() => {
+        const events = this.gameEngine.update();
+        
+        // Broadcast game state to all players
+        this.broadcastGameState();
+        
+        // Broadcast events
+        if (events.length > 0) {
+          this.broadcast({
+            type: 'GAME_EVENTS',
+            events: events
+          });
+        }
+        
+        // Check if game is over
+        if (this.gameEngine.gameOver) {
+          this.endGame();
+        }
+      }, 1000 / GAME_CONFIG.tickRate);
       
-      // Check if game is over
-      if (this.gameEngine.gameOver) {
-        this.endGame();
-      }
-    }, 1000 / GAME_CONFIG.tickRate);
-    
       return true;
     } catch (error) {
       console.error('Error starting game:', error);
@@ -140,6 +217,19 @@ class Lobby {
       clearInterval(this.gameInterval);
       this.gameInterval = null;
     }
+    
+    // Reset game state but keep players in lobby
+    this.gameStarted = false;
+    this.gameEngine = null;
+    
+    // Reset all ready states
+    this.resetReadyStates();
+    
+    // Notify all players to return to lobby
+    this.broadcast({
+      type: 'RETURN_TO_LOBBY',
+      lobbyInfo: this.getLobbyInfo()
+    });
   }
   
   handlePlayerAction(playerId, action) {
@@ -147,7 +237,6 @@ class Lobby {
     
     switch (action.type) {
       case 'MOVE':
-        // Pass the entire action object (contains vx, vy)
         this.gameEngine.handlePlayerMove(playerId, action);
         break;
       case 'PLACE_BOMB':
@@ -196,12 +285,19 @@ class Lobby {
       playerCount: this.players.size,
       maxPlayers: GAME_CONFIG.maxPlayersPerLobby,
       gameStarted: this.gameStarted,
+      mapName: this.mapName,
+      settings: this.settings,
       players: Array.from(this.players.values()).map(p => ({
         id: p.id,
         username: p.username,
         ready: p.ready
       }))
     };
+  }
+  
+  // Get default settings for UI
+  static getDefaultSettings() {
+    return { ...DEFAULT_SETTINGS };
   }
   
   destroy() {
@@ -211,5 +307,3 @@ class Lobby {
 }
 
 module.exports = Lobby;
-
-
