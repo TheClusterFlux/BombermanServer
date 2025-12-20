@@ -218,18 +218,42 @@ class Lobby {
       this.gameInterval = null;
     }
     
-    // Reset game state but keep players in lobby
-    this.gameStarted = false;
-    this.gameEngine = null;
+    // Mark game as ended but don't reset yet - wait for players to return to lobby
+    this.gameEnded = true;
+  }
+  
+  // Called when a player chooses to return to lobby after game over
+  playerReturnToLobby(playerId) {
+    // If this is the first player returning, reset the game state
+    if (this.gameEnded && this.gameStarted) {
+      this.gameStarted = false;
+      this.gameEngine = null;
+      this.gameEnded = false;
+      this.resetReadyStates();
+    }
     
-    // Reset all ready states
-    this.resetReadyStates();
-    
-    // Notify all players to return to lobby
-    this.broadcast({
+    // Send lobby info to this player
+    this.sendToPlayer(playerId, {
       type: 'RETURN_TO_LOBBY',
       lobbyInfo: this.getLobbyInfo()
     });
+  }
+  
+  // Kick a player (host only)
+  kickPlayer(kickedPlayerId) {
+    const player = this.players.get(kickedPlayerId);
+    if (!player) return false;
+    
+    // Send kicked message to the player
+    this.sendToPlayer(kickedPlayerId, {
+      type: 'KICKED_FROM_LOBBY',
+      message: 'You have been kicked from the lobby'
+    });
+    
+    // Remove the player
+    this.players.delete(kickedPlayerId);
+    
+    return true;
   }
   
   handlePlayerAction(playerId, action) {

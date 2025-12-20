@@ -264,6 +264,35 @@ function handleMessage(ws, message) {
         });
       }
       break;
+      
+    case 'RETURN_TO_LOBBY_REQUEST':
+      const returnLobby = lobbyManager.findPlayerLobby(client.id);
+      if (returnLobby) {
+        returnLobby.playerReturnToLobby(client.id);
+        // Notify others that player returned
+        returnLobby.broadcast({
+          type: 'LOBBY_UPDATED',
+          lobbyInfo: returnLobby.getLobbyInfo()
+        });
+      }
+      break;
+      
+    case 'KICK_PLAYER':
+      const kickLobby = lobbyManager.findPlayerLobby(client.id);
+      if (kickLobby && kickLobby.hostId === client.id && !kickLobby.gameStarted) {
+        const targetId = message.playerId;
+        if (targetId && targetId !== client.id) {
+          if (kickLobby.kickPlayer(targetId)) {
+            kickLobby.broadcast({
+              type: 'PLAYER_LEFT',
+              playerId: targetId,
+              kicked: true,
+              lobbyInfo: kickLobby.getLobbyInfo()
+            });
+          }
+        }
+      }
+      break;
   }
 }
 
