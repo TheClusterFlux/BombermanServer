@@ -39,34 +39,74 @@ class Player {
     let newX = this.x + this.velocityX * deltaTime;
     let newY = this.y + this.velocityY * deltaTime;
     
-    // Try moving diagonally first (full velocity)
-    const canMoveDiagonal = this.canMoveTo(newX, newY, map, otherPlayers, bombs);
-    if (canMoveDiagonal) {
+    // Try moving to new position
+    if (this.canMoveTo(newX, newY, map, otherPlayers, bombs)) {
       this.x = newX;
       this.y = newY;
       return;
     }
     
-    // If diagonal blocked, try each axis independently
-    // This allows sliding along walls while holding both keys
+    // CORNER ASSIST: If blocked, try to nudge player into lanes
+    const cornerAssist = 0.35; // How close to corner edge to assist (roughly player radius)
+    const nudgeSpeed = this.speed * 0.5; // How fast to nudge toward lane center
+    const nudgeAmount = nudgeSpeed * deltaTime;
+    
+    // Try each axis independently with corner assist
     const canMoveX = this.canMoveTo(newX, this.y, map, otherPlayers, bombs);
     const canMoveY = this.canMoveTo(this.x, newY, map, otherPlayers, bombs);
     
-    // Move on whichever axis is free
-    // Keep checking both so if one opens up, we move in that direction too
     if (canMoveX) {
       this.x = newX;
-    }
-    if (canMoveY) {
-      this.y = newY;
+      // Moving horizontally - try to center vertically if near a corner
+      if (!canMoveY && this.velocityY !== 0) {
+        const tileY = Math.floor(this.y);
+        const offsetY = this.y - (tileY + 0.5);
+        if (Math.abs(offsetY) < cornerAssist && Math.abs(offsetY) > 0.01) {
+          // Nudge toward tile center
+          this.y -= Math.sign(offsetY) * Math.min(nudgeAmount, Math.abs(offsetY));
+        }
+      }
     }
     
-    // If both individual axes work but diagonal didn't, try moving to the position
-    // This handles cases where collision detection is more strict on diagonal
-    if (canMoveX && canMoveY && !canMoveDiagonal) {
-      const finalCanMove = this.canMoveTo(this.x, this.y, map, otherPlayers, bombs);
-      if (finalCanMove) {
-        // Position is valid, we're good
+    if (canMoveY) {
+      this.y = newY;
+      // Moving vertically - try to center horizontally if near a corner
+      if (!canMoveX && this.velocityX !== 0) {
+        const tileX = Math.floor(this.x);
+        const offsetX = this.x - (tileX + 0.5);
+        if (Math.abs(offsetX) < cornerAssist && Math.abs(offsetX) > 0.01) {
+          // Nudge toward tile center
+          this.x -= Math.sign(offsetX) * Math.min(nudgeAmount, Math.abs(offsetX));
+        }
+      }
+    }
+    
+    // If completely blocked, try corner assist to slide around
+    if (!canMoveX && !canMoveY) {
+      // Check if nudging would help us get around a corner
+      const tileX = Math.floor(this.x);
+      const tileY = Math.floor(this.y);
+      const offsetX = this.x - (tileX + 0.5);
+      const offsetY = this.y - (tileY + 0.5);
+      
+      // Try nudging horizontally to slide around vertical obstacle
+      if (this.velocityY !== 0 && Math.abs(offsetX) < cornerAssist) {
+        const testX = this.x - Math.sign(offsetX) * nudgeAmount;
+        if (this.canMoveTo(testX, newY, map, otherPlayers, bombs)) {
+          this.x = testX;
+          this.y = newY;
+          return;
+        }
+      }
+      
+      // Try nudging vertically to slide around horizontal obstacle
+      if (this.velocityX !== 0 && Math.abs(offsetY) < cornerAssist) {
+        const testY = this.y - Math.sign(offsetY) * nudgeAmount;
+        if (this.canMoveTo(newX, testY, map, otherPlayers, bombs)) {
+          this.x = newX;
+          this.y = testY;
+          return;
+        }
       }
     }
   }
