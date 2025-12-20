@@ -14,6 +14,10 @@ class GameEngine {
     this.winner = null;
     this.bombIdCounter = 0;
     
+    // Tick tracking for synchronization
+    this.tick = 0;
+    this.startTime = Date.now();
+    
     // Initialize players at spawn points
     players.forEach((playerData, index) => {
       const spawnPoint = this.map.getSpawnPoint(index);
@@ -28,6 +32,7 @@ class GameEngine {
     const now = Date.now();
     const deltaTime = (now - this.lastUpdate) / 1000; // Convert to seconds
     this.lastUpdate = now;
+    this.tick++;
     
     const events = [];
     
@@ -179,6 +184,8 @@ class GameEngine {
   
   getGameState() {
     return {
+      tick: this.tick,
+      serverTime: Date.now(),
       map: this.map.serialize(),
       players: Array.from(this.players.values()).map(p => p.serialize()),
       bombs: Array.from(this.bombs.values()).map(b => b.serialize()),
