@@ -32,8 +32,8 @@ class Bomb {
       { dx: 0, dy: -1 }  // Up
     ];
     
-    // Add bomb position itself
-    affectedTiles.push({ x: this.x, y: this.y });
+    // Add bomb position itself (distance 0)
+    affectedTiles.push({ x: this.x, y: this.y, distance: 0 });
     
     for (const dir of directions) {
       for (let i = 1; i <= this.range; i++) {
@@ -52,7 +52,8 @@ class Bomb {
           break;
         }
         
-        affectedTiles.push({ x, y });
+        // Distance from bomb center for propagation timing
+        affectedTiles.push({ x, y, distance: i });
         
         // Box blocks further explosion but gets destroyed
         if (tile === GAME_CONFIG.tiles.BOX) {
@@ -63,26 +64,31 @@ class Bomb {
       }
     }
     
-    // Check if any bombs are caught in explosion (chain reaction!)
+    // Chain reaction detection moved to GameEngine.update() for propagation timing
+    // Only instant chain reaction for bombs at center (distance 0)
     if (allBombs) {
       for (const [bombId, bomb] of allBombs.entries()) {
         if (bomb.id === this.id || bomb.exploded) continue;
         
-        if (affectedTiles.some(t => t.x === bomb.x && t.y === bomb.y)) {
-          console.log(`Chain reaction! Bomb at (${bomb.x}, ${bomb.y}) hit by explosion`);
+        // Only chain instantly if bomb is at explosion center
+        if (bomb.x === this.x && bomb.y === this.y) {
+          console.log(`Instant chain reaction! Bomb at center (${bomb.x}, ${bomb.y})`);
           chainBombs.push(bombId);
         }
       }
     }
     
-    // Check if any players are caught in explosion
+    // NOTE: Player kills are now handled in GameEngine.update() with propagation timing
+    // We still return killedPlayers for instant-kill at center (distance 0)
     for (const player of players) {
       if (!player.alive) continue;
       
       const px = Math.floor(player.x);
       const py = Math.floor(player.y);
       
-      if (affectedTiles.some(t => t.x === px && t.y === py)) {
+      // Only instant kill at bomb center (distance 0)
+      const centerTile = affectedTiles.find(t => t.distance === 0);
+      if (centerTile && centerTile.x === px && centerTile.y === py) {
         player.kill();
         killedPlayers.push(player.id);
       }

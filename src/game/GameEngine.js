@@ -108,7 +108,10 @@ class GameEngine {
       this.explosions.push({
         tiles: result.tiles,
         timestamp: now,
-        duration: GAME_CONFIG.explosionDuration
+        duration: GAME_CONFIG.explosionDuration,
+        propagationDelay: GAME_CONFIG.explosionPropagationDelay,
+        originX: bomb.x,
+        originY: bomb.y
       });
       
       events.push({
@@ -141,6 +144,83 @@ class GameEngine {
     this.explosions = this.explosions.filter(exp => {
       return (now - exp.timestamp) < exp.duration;
     });
+    
+    // Check explosion propagation effects (players and chain reactions)
+    const chainBombsToExplode = [];
+    
+    for (const explosion of this.explosions) {
+      const age = now - explosion.timestamp;
+      
+      for (const tile of explosion.tiles) {
+        // Check if this tile has been reached by propagation
+        const tileActivationTime = tile.distance * explosion.propagationDelay;
+        if (age < tileActivationTime) continue;
+        
+        // Mark tile as active if not already
+        if (!tile.active) {
+          tile.active = true;
+          
+          // Check for chain reaction - bombs hit by newly activated tile
+          for (const [bombId, bomb] of this.bombs.entries()) {
+            if (bomb.exploded) continue;
+            if (bomb.x === tile.x && bomb.y === tile.y) {
+              console.log(`Chain reaction! Bomb at (${tile.x}, ${tile.y}) hit by propagating explosion`);
+              chainBombsToExplode.push(bombId);
+            }
+          }
+        }
+        
+        // Check players standing in active tile
+        for (const player of allPlayers) {
+          if (!player.alive) continue;
+          
+          const px = Math.floor(player.x);
+          const py = Math.floor(player.y);
+          
+          if (tile.x === px && tile.y === py) {
+            player.kill();
+            events.push({
+              type: 'PLAYER_KILLED',
+              playerId: player.id,
+              cause: 'explosion'
+            });
+            console.log(`Player ${player.username} killed by explosion at (${px}, ${py})`);
+          }
+        }
+      }
+    }
+    
+    // Process chain reactions from propagation
+    for (const bombId of chainBombsToExplode) {
+      const bomb = this.bombs.get(bombId);
+      if (!bomb || bomb.exploded) continue;
+      
+      const result = bomb.explode(this.map, allPlayers, this.bombs);
+      
+      this.explosions.push({
+        tiles: result.tiles,
+        timestamp: now,
+        duration: GAME_CONFIG.explosionDuration,
+        propagationDelay: GAME_CONFIG.explosionPropagationDelay,
+        originX: bomb.x,
+        originY: bomb.y
+      });
+      
+      events.push({
+        type: 'EXPLOSION',
+        bombId: bombId,
+        tiles: result.tiles,
+        killedPlayers: result.players,
+        chainReaction: true
+      });
+      
+      const player = this.players.get(bomb.playerId);
+      if (player) {
+        player.activeBombs--;
+      }
+      
+      this.bombs.delete(bombId);
+    }
     
     // Check for game over
     if (!this.gameOver) {

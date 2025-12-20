@@ -6,6 +6,7 @@ const GAME_CONFIG = {
   minPlayersToStart: 2,
   bombTimer: 3000, // ms
   explosionDuration: 500, // ms
+  explosionPropagationDelay: 20, // ms per tile (20ms = 50 tiles/sec, reaches 10 tiles in 200ms)
   tickRate: 60, // game updates per second
   
   // Player defaults
