@@ -52,7 +52,12 @@ class GameEngine {
     const allPlayers = Array.from(this.players.values());
     for (const player of allPlayers) {
       if (player.alive) {
-        player.updatePosition(deltaTime, this.map, allPlayers, this.bombs);
+        // Only run server physics if client didn't send authoritative position
+        if (!player.clientAuthoritative) {
+          player.updatePosition(deltaTime, this.map, allPlayers, this.bombs);
+        }
+        // Reset flag for next frame
+        player.clientAuthoritative = false;
         
         // Check if player fell into a hole
         if (player.isOnHole(this.map)) {
@@ -157,10 +162,37 @@ class GameEngine {
     const player = this.players.get(playerId);
     if (!player || !player.alive) return false;
     
+    // If client sends position directly, validate and accept it
+    // This is the client-authoritative position, so we skip server physics for this player
+    if (action.x !== undefined && action.y !== undefined) {
+      const newX = action.x;
+      const newY = action.y;
+      
+      // Validate the position is reasonable (not teleporting, not in walls)
+      const dx = newX - player.x;
+      const dy = newY - player.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Max distance per network update (generous to account for latency)
+      const maxDistance = 2.0;
+      
+      if (distance <= maxDistance) {
+        // Check if new position is valid (not in walls, not in other players)
+        if (player.canMoveTo(newX, newY, this.map, Array.from(this.players.values()), this.bombs)) {
+          player.x = newX;
+          player.y = newY;
+          // Mark that we accepted client position - skip server physics this frame
+          player.clientAuthoritative = true;
+        }
+        // If position invalid (e.g., collision with other player), keep old position
+      }
+      // If teleporting, ignore
+    }
+    
+    // Handle velocity for server physics (only used when client doesn't send position)
     let vx = 0;
     let vy = 0;
     
-    // Use velocity values from client (supports diagonal movement)
     if (action.vx !== undefined && action.vy !== undefined) {
       vx = action.vx;
       vy = action.vy;
